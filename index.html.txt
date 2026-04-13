@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RUGCHECK — Solana Token Scanner</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080b0f; --surface: #0e1318; --surface2: #141c24; --border: #1e2d3d;
+    --accent: #00ff87; --accent2: #00c6ff; --danger: #ff3d57; --warn: #ffb800;
+    --safe: #00ff87; --text: #e2eaf3; --muted: #4a6070;
+    --font-mono: 'Space Mono', monospace; --font-display: 'Bebas Neue', sans-serif; --font-body: 'DM Sans', sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-body); min-height:100vh; overflow-x:hidden; }
+  body::before { content:''; position:fixed; inset:0; background-image:linear-gradient(rgba(0,255,135,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,135,0.03) 1px,transparent 1px); background-size:40px 40px; pointer-events:none; z-index:0; }
+  .container { max-width:900px; margin:0 auto; padding:0 20px; position:relative; z-index:1; }
+
+  header { padding:40px 0 20px; text-align:center; }
+  .logo { font-family:var(--font-display); font-size:clamp(52px,10vw,88px); letter-spacing:6px; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; line-height:1; animation:flicker 4s infinite; }
+  @keyframes flicker { 0%,95%,100%{opacity:1;} 96%{opacity:0.8;} 97%{opacity:1;} 98%{opacity:0.6;} }
+  .tagline { font-family:var(--font-mono); font-size:11px; color:var(--muted); letter-spacing:4px; text-transform:uppercase; margin-top:8px; }
+  .badge { display:inline-block; background:rgba(0,255,135,0.08); border:1px solid rgba(0,255,135,0.2); color:var(--accent); font-family:var(--font-mono); font-size:10px; padding:3px 10px; border-radius:2px; margin-top:12px; letter-spacing:2px; }
+
+  .key-setup { background:var(--surface); border:1px solid rgba(0,198,255,0.25); border-radius:6px; padding:20px 24px; margin:28px 0; }
+  .key-setup-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:8px; }
+  .key-setup-title { font-family:var(--font-mono); font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--accent2); }
+  .key-status { font-family:var(--font-mono); font-size:10px; padding:3px 10px; border-radius:2px; letter-spacing:1px; }
+  .key-status.set { background:rgba(0,255,135,0.1); color:var(--accent); }
+  .key-status.unset { background:rgba(255,184,0,0.1); color:var(--warn); }
+  .key-row { display:flex; gap:10px; align-items:stretch; }
+  .key-input { flex:1; background:var(--surface2); border:1px solid var(--border); color:var(--text); font-family:var(--font-mono); font-size:12px; padding:12px 16px; outline:none; border-radius:4px; transition:border-color 0.2s; }
+  .key-input::placeholder { color:var(--muted); }
+  .key-input:focus { border-color:var(--accent2); }
+  .key-btn { background:var(--accent2); color:#000; border:none; font-family:var(--font-display); font-size:16px; letter-spacing:1px; padding:0 20px; cursor:pointer; border-radius:4px; transition:all 0.15s; white-space:nowrap; }
+  .key-btn:hover { background:#33d4ff; }
+  .key-note { font-family:var(--font-mono); font-size:10px; color:var(--muted); margin-top:8px; line-height:1.6; }
+  .key-note span { color:var(--accent); }
+
+  .search-section { margin:8px 0 28px; }
+  .search-label { font-family:var(--font-mono); font-size:11px; color:var(--muted); letter-spacing:3px; text-transform:uppercase; margin-bottom:12px; display:block; }
+  .search-row { display:flex; gap:12px; align-items:stretch; }
+  .token-input { flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text); font-family:var(--font-mono); font-size:13px; padding:16px 20px; outline:none; transition:border-color 0.2s; border-radius:4px; }
+  .token-input::placeholder { color:var(--muted); }
+  .token-input:focus { border-color:var(--accent); box-shadow:0 0 0 1px rgba(0,255,135,0.15); }
+  .scan-btn { background:var(--accent); color:#000; border:none; font-family:var(--font-display); font-size:20px; letter-spacing:2px; padding:0 32px; cursor:pointer; border-radius:4px; transition:all 0.15s; white-space:nowrap; }
+  .scan-btn:hover { background:#00e87a; transform:translateY(-1px); }
+  .scan-btn:active { transform:translateY(0); }
+  .scan-btn:disabled { background:var(--muted); cursor:not-allowed; transform:none; }
+  .api-note { margin-top:10px; font-family:var(--font-mono); font-size:10px; color:var(--muted); display:flex; align-items:center; gap:8px; }
+  .api-dot { width:6px; height:6px; border-radius:50%; animation:pulse 2s infinite; flex-shrink:0; }
+  .api-dot.live { background:var(--accent); }
+  .api-dot.warn { background:var(--warn); }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  .loading-bar { height:2px; background:var(--border); margin:24px 0; border-radius:1px; overflow:hidden; display:none; }
+  .loading-bar.active { display:block; }
+  .loading-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); width:0%; transition:width 0.4s ease; border-radius:1px; }
+  .loading-status { font-family:var(--font-mono); font-size:11px; color:var(--accent); letter-spacing:2px; text-align:center; display:none; margin-bottom:20px; }
+  .loading-status.active { display:block; }
+
+  .error-box { background:rgba(255,61,87,0.07); border:1px solid rgba(255,61,87,0.3); border-radius:6px; padding:16px 20px; margin-bottom:20px; font-family:var(--font-mono); font-size:12px; color:var(--danger); display:none; line-height:1.6; }
+  .error-box.visible { display:block; }
+
+  #results { display:none; animation:fadeUp 0.4s ease; }
+  #results.visible { display:block; }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(20px);} to{opacity:1;transform:translateY(0);} }
+
+  .verdict { border-radius:6px; padding:24px 28px; margin-bottom:24px; display:flex; align-items:center; gap:20px; position:relative; overflow:hidden; }
+  .verdict::before { content:''; position:absolute; top:0; left:0; width:4px; height:100%; }
+  .verdict.safe { background:rgba(0,255,135,0.05); border:1px solid rgba(0,255,135,0.25); }
+  .verdict.safe::before { background:var(--safe); }
+  .verdict.warn { background:rgba(255,184,0,0.05); border:1px solid rgba(255,184,0,0.25); }
+  .verdict.warn::before { background:var(--warn); }
+  .verdict.danger { background:rgba(255,61,87,0.07); border:1px solid rgba(255,61,87,0.3); }
+  .verdict.danger::before { background:var(--danger); }
+  .verdict-icon { font-size:36px; line-height:1; flex-shrink:0; }
+  .verdict-text h2 { font-family:var(--font-display); font-size:28px; letter-spacing:2px; }
+  .verdict.safe .verdict-text h2 { color:var(--safe); }
+  .verdict.warn .verdict-text h2 { color:var(--warn); }
+  .verdict.danger .verdict-text h2 { color:var(--danger); }
+  .verdict-text p { font-size:14px; color:var(--muted); margin-top:4px; line-height:1.5; }
+  .verdict-score { margin-left:auto; text-align:center; flex-shrink:0; }
+  .score-ring { width:72px; height:72px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-direction:column; border:2px solid; }
+  .verdict.safe .score-ring { border-color:var(--safe); }
+  .verdict.warn .score-ring { border-color:var(--warn); }
+  .verdict.danger .score-ring { border-color:var(--danger); }
+  .score-num { font-family:var(--font-display); font-size:26px; line-height:1; }
+  .verdict.safe .score-num { color:var(--safe); }
+  .verdict.warn .score-num { color:var(--warn); }
+  .verdict.danger .score-num { color:var(--danger); }
+  .score-label { font-family:var(--font-mono); font-size:8px; color:var(--muted); letter-spacing:1px; }
+
+  .checks-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; margin-bottom:24px; }
+  .check-card { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:18px 20px; transition:border-color 0.2s; }
+  .check-card:hover { border-color:rgba(0,255,135,0.2); }
+  .check-card.pass { border-left:3px solid var(--safe); }
+  .check-card.fail { border-left:3px solid var(--danger); }
+  .check-card.warn { border-left:3px solid var(--warn); }
+  .check-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .check-title { font-family:var(--font-mono); font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); }
+  .check-status { font-family:var(--font-mono); font-size:10px; letter-spacing:1px; padding:2px 8px; border-radius:2px; font-weight:700; }
+  .check-status.pass { background:rgba(0,255,135,0.1); color:var(--safe); }
+  .check-status.fail { background:rgba(255,61,87,0.1); color:var(--danger); }
+  .check-status.warn { background:rgba(255,184,0,0.1); color:var(--warn); }
+  .check-value { font-size:20px; font-weight:600; color:var(--text); margin-bottom:4px; line-height:1.2; }
+  .check-detail { font-size:12px; color:var(--muted); line-height:1.5; }
+  .check-detail strong { color:var(--text); }
+
+  .section-header { font-family:var(--font-mono); font-size:11px; letter-spacing:4px; text-transform:uppercase; color:var(--muted); margin:28px 0 14px; display:flex; align-items:center; gap:12px; }
+  .section-header::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  .holder-bars { display:flex; flex-direction:column; gap:8px; }
+  .holder-row { display:flex; align-items:center; gap:12px; font-family:var(--font-mono); font-size:11px; }
+  .holder-label { width:130px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
+  .holder-bar-wrap { flex:1; height:6px; background:var(--border); border-radius:3px; overflow:hidden; }
+  .holder-bar-fill { height:100%; border-radius:3px; transition:width 1s ease; }
+  .holder-pct { width:44px; text-align:right; color:var(--text); }
+
+  .sm-table { width:100%; border-collapse:collapse; }
+  .sm-table th { font-family:var(--font-mono); font-size:10px; letter-spacing:2px; color:var(--muted); text-align:left; padding:8px 12px; border-bottom:1px solid var(--border); text-transform:uppercase; }
+  .sm-table td { font-family:var(--font-mono); font-size:11px; padding:10px 12px; border-bottom:1px solid rgba(30,45,61,0.5); color:var(--text); }
+  .sm-table tr:last-child td { border-bottom:none; }
+  .sm-table td.green { color:var(--safe); }
+  .sm-table td.red { color:var(--danger); }
+  .sm-table td.yellow { color:var(--warn); }
+
+  .narrative-box { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:20px; margin-bottom:14px; }
+  .narrative-title { font-family:var(--font-mono); font-size:12px; color:var(--accent2); margin-bottom:8px; letter-spacing:1px; }
+  .narrative-text { font-size:13px; color:var(--muted); line-height:1.7; }
+  .narrative-text strong { color:var(--text); }
+
+  .flags-list { display:flex; flex-direction:column; gap:8px; }
+  .flag-item { display:flex; align-items:flex-start; gap:12px; padding:12px 16px; background:var(--surface); border-radius:4px; border:1px solid var(--border); }
+  .flag-icon { font-size:16px; flex-shrink:0; margin-top:1px; }
+  .flag-text { font-size:13px; color:var(--muted); line-height:1.5; }
+  .flag-text strong { color:var(--text); }
+
+  .book-ref { background:rgba(0,198,255,0.04); border:1px solid rgba(0,198,255,0.15); border-radius:6px; padding:16px 20px; margin-top:24px; font-family:var(--font-mono); font-size:11px; color:var(--muted); line-height:1.7; }
+  .book-ref span { color:var(--accent2); }
+
+  .tabs { display:flex; gap:4px; margin-bottom:16px; border-bottom:1px solid var(--border); }
+  .tab { font-family:var(--font-mono); font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); padding:10px 16px; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; transition:all 0.15s; }
+  .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .tab:hover:not(.active) { color:var(--text); }
+  .tab-panel { display:none; }
+  .tab-panel.active { display:block; }
+
+  .token-bar { display:flex; align-items:center; gap:16px; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:14px 20px; margin-bottom:20px; flex-wrap:wrap; }
+  .token-name { font-family:var(--font-display); font-size:22px; letter-spacing:2px; color:var(--text); }
+  .token-addr { font-family:var(--font-mono); font-size:11px; color:var(--muted); }
+  .token-chain { margin-left:auto; background:rgba(0,255,135,0.07); border:1px solid rgba(0,255,135,0.2); color:var(--accent); font-family:var(--font-mono); font-size:10px; padding:4px 10px; border-radius:2px; letter-spacing:2px; }
+
+  footer { padding:40px 0 30px; text-align:center; font-family:var(--font-mono); font-size:10px; color:var(--muted); letter-spacing:2px; border-top:1px solid var(--border); margin-top:48px; }
+
+  @media(max-width:600px) {
+    .checks-grid { grid-template-columns:1fr; }
+    .verdict { flex-wrap:wrap; }
+    .verdict-score { margin-left:0; }
+    .search-row,.key-row { flex-direction:column; }
+    .scan-btn,.key-btn { padding:14px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="logo">RUGCHECK</div>
+    <div class="tagline">Solana Token Intelligence Scanner</div>
+    <div class="badge">⬡ SOLANA · LIVE DATA</div>
+  </header>
+
+  <!-- KEY SETUP -->
+  <div class="key-setup">
+    <div class="key-setup-header">
+      <div class="key-setup-title">// Helius API Key</div>
+      <div class="key-status unset" id="keyStatusBadge">NOT SET</div>
+    </div>
+    <div class="key-row">
+      <input type="password" class="key-input" id="heliusKeyInput" placeholder="Paste your Helius API key here..." autocomplete="off" />
+      <button class="key-btn" onclick="saveKey()">SAVE</button>
+    </div>
+    <div class="key-note">
+      🔒 Stored only in your browser memory — never sent anywhere except directly to Helius.<br>
+      Get a free key at <span>helius.dev</span> · DexScreener requires no key (free public API).
+    </div>
+  </div>
+
+  <!-- SEARCH -->
+  <div class="search-section">
+    <span class="search-label">// Token Contract Address</span>
+    <div class="search-row">
+      <input type="text" class="token-input" id="tokenInput" placeholder="Paste Solana token contract address..." maxlength="120" />
+      <button class="scan-btn" id="scanBtn" onclick="runScan()">SCAN</button>
+    </div>
+    <div class="api-note">
+      <div class="api-dot warn" id="modeDot"></div>
+      <span id="modeLabel">Set your Helius key above to enable live scanning.</span>
+    </div>
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+  <div class="loading-bar" id="loadingBar"><div class="loading-fill" id="loadingFill"></div></div>
+  <div class="loading-status" id="loadingStatus">SCANNING...</div>
+
+  <!-- RESULTS -->
+  <div id="results">
+    <div class="token-bar">
+      <div>
+        <div class="token-name" id="resTokenName">—</div>
+        <div class="token-addr" id="resTokenAddr">—</div>
+      </div>
+      <div class="token-chain">SOLANA</div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('overview')">Overview</div>
+      <div class="tab" onclick="switchTab('holders')">Holders</div>
+      <div class="tab" onclick="switchTab('earlytxns')">Early Txns</div>
+      <div class="tab" onclick="switchTab('market')">Market Data</div>
+    </div>
+
+    <div class="tab-panel active" id="tab-overview">
+      <div class="verdict" id="verdictBanner">
+        <div class="verdict-icon" id="verdictIcon">⚠️</div>
+        <div class="verdict-text"><h2 id="verdictTitle">CAUTION</h2><p id="verdictDesc">Scanning...</p></div>
+        <div class="verdict-score"><div class="score-ring"><div class="score-num" id="scoreNum">—</div><div class="score-label">SCORE</div></div></div>
+      </div>
+      <div class="section-header">Core Checks</div>
+      <div class="checks-grid" id="checksGrid"></div>
+      <div class="section-header">Red Flags & Notes</div>
+      <div class="flags-list" id="flagsList"></div>
+      <div class="book-ref" id="bookRef"></div>
+    </div>
+
+    <div class="tab-panel" id="tab-holders">
+      <div class="section-header">Top Holder Distribution</div>
+      <div class="narrative-box">
+        <div class="narrative-title">// BOOK RULE — Ch.3: Holder Distribution</div>
+        <div class="narrative-text"><strong>If one wallet holds above 5%, be cautious.</strong> Multiple connected wallets holding big amounts = farm setup waiting to dump. The more even the distribution, the healthier the chart.</div>
+      </div>
+      <div class="holder-bars" id="holderBars"></div>
+    </div>
+
+    <div class="tab-panel" id="tab-earlytxns">
+      <div class="section-header">Early Transaction Analysis</div>
+      <div class="narrative-box">
+        <div class="narrative-title">// BOOK RULE — Ch.3 §5: Study Early Transactions</div>
+        <div class="narrative-text">Check who bought early. If buys look too identical, repetitive, or in the same block — that's a bot/sniper setup. <strong>These wallets will dump on retail.</strong></div>
+      </div>
+      <div style="background:var(--surface); border:1px solid var(--border); border-radius:6px; overflow:hidden;">
+        <table class="sm-table">
+          <thead><tr><th>Signature</th><th>Status</th><th>Time</th><th>Block</th><th>Signal</th></tr></thead>
+          <tbody id="txnBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-market">
+      <div class="section-header">Live Market Data</div>
+      <div id="marketContent"></div>
+    </div>
+  </div>
+
+  <footer>RUGCHECK · BUILT ON THE MEMECOIN ULTIMATE PLAYBOOK FRAMEWORK · SOLANA · LIVE MODE</footer>
+</div>
+
+<script>
+// ============================================================
+// KEY MANAGEMENT
+// ============================================================
+let HELIUS_KEY = '';
+
+function saveKey() {
+  const val = document.getElementById('heliusKeyInput').value.trim();
+  if (!val) { alert('Please paste your Helius API key first.'); return; }
+  HELIUS_KEY = val;
+  document.getElementById('heliusKeyInput').value = '••••••••••••••••••••••••••••••••';
+  document.getElementById('keyStatusBadge').textContent = 'ACTIVE ✓';
+  document.getElementById('keyStatusBadge').className = 'key-status set';
+  document.getElementById('modeDot').className = 'api-dot live';
+  document.getElementById('modeLabel').textContent = 'LIVE MODE — Helius + DexScreener connected.';
+}
+
+// ============================================================
+// API CALLS
+// ============================================================
+
+async function heliusRPC(method, params) {
+  const res = await fetch(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
+  });
+  if (!res.ok) throw new Error(`Helius HTTP ${res.status}`);
+  const json = await res.json();
+  if (json.error) throw new Error(`Helius RPC: ${json.error.message}`);
+  return json.result;
+}
+
+async function getDexData(address) {
+  const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`);
+  if (!res.ok) throw new Error(`DexScreener HTTP ${res.status}`);
+  const json = await res.json();
+  const pairs = (json.pairs || []).filter(p => p.chainId === 'solana');
+  pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0));
+  return pairs[0] || null;
+}
+
+// ============================================================
+// SCAN
+// ============================================================
+
+async function runScan() {
+  const addr = document.getElementById('tokenInput').value.trim();
+  if (!addr || addr.length < 30) { showError('Enter a valid Solana token contract address (43–44 characters).'); return; }
+  if (!HELIUS_KEY) { showError('Please set your Helius API key above first.'); return; }
+
+  hideError();
+  document.getElementById('results').classList.remove('visible');
+  const fill = document.getElementById('loadingFill');
+  const status = document.getElementById('loadingStatus');
+  const btn = document.getElementById('scanBtn');
+  btn.disabled = true;
+  document.getElementById('loadingBar').classList.add('active');
+  status.classList.add('active');
+
+  const prog = (p, msg) => { fill.style.width = p + '%'; status.textContent = msg; };
+
+  try {
+    prog(10, 'FETCHING DEXSCREENER DATA...');
+    let dexData = null;
+    try { dexData = await getDexData(addr); } catch(e) { console.warn('DexScreener:', e.message); }
+
+    prog(30, 'READING MINT INFO...');
+    let mintInfo = null;
+    try {
+      const r = await heliusRPC('getAccountInfo', [addr, { encoding: 'jsonParsed' }]);
+      mintInfo = r?.value?.data?.parsed?.info || null;
+    } catch(e) { console.warn('mintInfo:', e.message); }
+
+    prog(50, 'FETCHING TOKEN METADATA...');
+    let tokenMeta = null;
+    try { tokenMeta = await heliusRPC('getAsset', { id: addr }); } catch(e) { console.warn('tokenMeta:', e.message); }
+
+    prog(65, 'LOADING HOLDER DISTRIBUTION...');
+    let holders = [];
+    try {
+      const r = await heliusRPC('getTokenLargestAccounts', [addr]);
+      holders = r?.value || [];
+    } catch(e) { console.warn('holders:', e.message); }
+
+    prog(82, 'SCANNING EARLY TRANSACTIONS...');
+    let txns = [];
+    try {
+      const r = await heliusRPC('getSignaturesForAddress', [addr, { limit: 20 }]);
+      txns = r || [];
+    } catch(e) { console.warn('txns:', e.message); }
+
+    prog(95, 'CALCULATING VERDICT...');
+    await new Promise(r => setTimeout(r, 300));
+
+    const data = analyze(addr, dexData, mintInfo, tokenMeta, holders, txns);
+    render(data);
+
+  } catch(err) {
+    showError(`Scan error: ${err.message}. Check your API key is valid and the address is a Solana token mint.`);
+  } finally {
+    document.getElementById('loadingBar').classList.remove('active');
+    status.classList.remove('active');
+    fill.style.width = '0%';
+    btn.disabled = false;
+  }
+}
+
+function showError(msg) { const b = document.getElementById('errorBox'); b.textContent = '⚠ ' + msg; b.classList.add('visible'); }
+function hideError() { document.getElementById('errorBox').classList.remove('visible'); }
+
+// ============================================================
+// ANALYSIS — applies book framework
+// ============================================================
+
+function analyze(address, dex, mintInfo, tokenMeta, holders, txns) {
+  // Token name
+  const tokenName = dex?.baseToken?.symbol || tokenMeta?.content?.metadata?.symbol || address.slice(0,8)+'...';
+
+  // Liquidity
+  const liquidityUsd = dex?.liquidity?.usd || 0;
+  const liquidityLocked = (dex?.labels || []).some(l => String(l).toLowerCase().includes('lock'));
+
+  // Volume & fake volume check (book Ch.4)
+  const volume24h = dex?.volume?.h24 || 0;
+  const buys24h = dex?.txns?.h24?.buys || 0;
+  const sells24h = dex?.txns?.h24?.sells || 0;
+  const txns24h = buys24h + sells24h;
+  const avgTxSize = txns24h > 0 ? volume24h / txns24h : 0;
+  // Flag: avg trade >$30k on a memecoin is wash trading signal
+  const fakeVolumeFlag = txns24h > 5 && avgTxSize > 30000;
+
+  // Mint & freeze authority (critical)
+  const mintAuthority = mintInfo?.mintAuthority;
+  const freezeAuthority = mintInfo?.freezeAuthority;
+  const mintRevoked = !mintAuthority;
+  const freezeRevoked = !freezeAuthority;
+  const supply = mintInfo?.supply ? parseInt(mintInfo.supply) : null;
+  const decimals = mintInfo?.decimals ?? 9;
+  const supplyReadable = supply ? supply / Math.pow(10, decimals) : null;
+
+  // Holder distribution
+  let topHolders = [];
+  if (holders.length > 0) {
+    const totalRaw = holders.reduce((s, h) => s + parseFloat(h.uiAmount || 0), 0);
+    topHolders = holders.slice(0, 10).map((h, i) => {
+      const amt = parseFloat(h.uiAmount || 0);
+      let pct;
+      if (supplyReadable && supplyReadable > 0) {
+        pct = parseFloat(((amt / supplyReadable) * 100).toFixed(2));
+      } else {
+        pct = totalRaw > 0 ? parseFloat(((amt / totalRaw) * 100).toFixed(2)) : 0;
+      }
+      return { addr: h.address, pct, amt };
+    });
+  }
+  const topHolderPct = topHolders[0]?.pct || 0;
+  const holderRisk = topHolderPct > 15 ? 'high' : topHolderPct > 5 ? 'medium' : 'low';
+
+  // Early txn sniper detection (book Ch.3 §5)
+  const earlyTxns = txns.slice(0, 20).map((t, i) => ({
+    sig: t.signature ? t.signature.slice(0,8)+'...' : `tx${i}`,
+    fullSig: t.signature,
+    time: t.blockTime ? new Date(t.blockTime*1000).toLocaleTimeString() : '—',
+    slot: t.slot,
+    err: t.err !== null,
+    memo: t.memo
+  }));
+  const slots = earlyTxns.map(t => t.slot).filter(Boolean);
+  const uniqueSlots = new Set(slots).size;
+  const sniperFlag = earlyTxns.length >= 5 && uniqueSlots < earlyTxns.length * 0.5;
+
+  // Market data
+  const priceUsd = parseFloat(dex?.priceUsd || 0);
+  const marketCap = dex?.marketCap || dex?.fdv || 0;
+  const priceChange24h = dex?.priceChange?.h24 || 0;
+  const pairAge = dex?.pairCreatedAt
+    ? Math.floor((Date.now() - dex.pairCreatedAt) / 86400000)
+    : null;
+
+  // Score (book framework)
+  let score = 100;
+  if (!mintRevoked) score -= 25;
+  if (!liquidityLocked) score -= 20;
+  if (holderRisk === 'high') score -= 20;
+  else if (holderRisk === 'medium') score -= 8;
+  if (fakeVolumeFlag) score -= 15;
+  if (sniperFlag) score -= 10;
+  if (!freezeRevoked) score -= 8;
+  if (liquidityUsd > 0 && liquidityUsd < 5000) score -= 10;
+  if (pairAge !== null && pairAge < 1) score -= 5;
+  score = Math.max(5, Math.min(99, score));
+
+  return {
+    address, tokenName,
+    liquidityUsd, liquidityLocked,
+    volume24h, txns24h, buys24h, sells24h, avgTxSize, fakeVolumeFlag,
+    mintRevoked, freezeRevoked,
+    supplyReadable,
+    topHolders, topHolderPct, holderRisk,
+    earlyTxns, sniperFlag, uniqueSlots,
+    priceUsd, marketCap, priceChange24h, pairAge,
+    score,
+    dexUrl: dex?.url || null,
+    dexId: dex?.dexId || null
+  };
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+
+function render(d) {
+  document.getElementById('resTokenName').textContent = d.tokenName;
+  document.getElementById('resTokenAddr').textContent = d.address;
+
+  // Verdict
+  const banner = document.getElementById('verdictBanner');
+  banner.className = 'verdict';
+  document.getElementById('scoreNum').textContent = d.score;
+  if (d.score >= 70) {
+    banner.classList.add('safe');
+    document.getElementById('verdictIcon').textContent = '✅';
+    document.getElementById('verdictTitle').textContent = 'RELATIVELY SAFE';
+    document.getElementById('verdictDesc').textContent = 'Most signals are clean. Still DYOR — no token is 100% safe. Trade with defined risk.';
+  } else if (d.score >= 40) {
+    banner.classList.add('warn');
+    document.getElementById('verdictIcon').textContent = '⚠️';
+    document.getElementById('verdictTitle').textContent = 'CAUTION';
+    document.getElementById('verdictDesc').textContent = 'Multiple risk signals detected. Review all checks carefully before entering.';
+  } else {
+    banner.classList.add('danger');
+    document.getElementById('verdictIcon').textContent = '🚨';
+    document.getElementById('verdictTitle').textContent = 'HIGH RISK / LIKELY RUG';
+    document.getElementById('verdictDesc').textContent = 'Serious red flags across multiple checks. This token shows rug patterns. Avoid.';
+  }
+
+  // Checks
+  const checks = [
+    {
+      title: 'LIQUIDITY',
+      value: d.liquidityUsd > 0 ? '$' + Math.round(d.liquidityUsd).toLocaleString() : 'Not on DEX',
+      detail: d.liquidityUsd > 0
+        ? `${d.liquidityLocked ? '<strong>Locked</strong>' : '<strong style="color:var(--danger)">NOT LOCKED</strong>'} · DEX: ${d.dexId || 'unknown'}${d.dexUrl ? ` · <a href="${d.dexUrl}" target="_blank" style="color:var(--accent2)">View ↗</a>` : ''}`
+        : 'Token not found on DexScreener — may be unlisted or too new.',
+      status: d.liquidityLocked && d.liquidityUsd > 15000 ? 'pass' : !d.liquidityLocked && d.liquidityUsd > 0 ? 'fail' : d.liquidityUsd < 5000 && d.liquidityUsd > 0 ? 'fail' : 'warn'
+    },
+    {
+      title: 'MINT AUTHORITY',
+      value: d.mintRevoked ? 'REVOKED ✓' : 'ACTIVE ⚠',
+      detail: d.mintRevoked
+        ? 'Cannot mint new tokens — supply is fixed.'
+        : '<strong style="color:var(--danger)">Dev can print unlimited tokens and dump.</strong> This is a critical red flag. (Ch.2 Rule 1)',
+      status: d.mintRevoked ? 'pass' : 'fail'
+    },
+    {
+      title: 'FREEZE AUTH',
+      value: d.freezeRevoked ? 'REVOKED ✓' : 'ACTIVE ⚠',
+      detail: d.freezeRevoked
+        ? 'Freeze authority revoked — wallets cannot be frozen.'
+        : '<strong style="color:var(--warn)">Freeze authority still active</strong> — potential to freeze holder wallets.',
+      status: d.freezeRevoked ? 'pass' : 'warn'
+    },
+    {
+      title: 'TOP HOLDER',
+      value: d.topHolderPct > 0 ? d.topHolderPct + '%' : 'No data',
+      detail: d.holderRisk === 'high'
+        ? `<strong style="color:var(--danger)">Single wallet holds ${d.topHolderPct}%</strong> — one sell crashes the chart. (Ch.3)`
+        : d.holderRisk === 'medium'
+        ? `<strong style="color:var(--warn)">${d.topHolderPct}% in one wallet</strong> — above 5% danger zone. Watch this. (Ch.3)`
+        : d.topHolderPct > 0 ? `Healthy — largest wallet holds ${d.topHolderPct}%` : 'Holder data unavailable.',
+      status: d.holderRisk === 'high' ? 'fail' : d.holderRisk === 'medium' ? 'warn' : d.topHolderPct > 0 ? 'pass' : 'warn'
+    },
+    {
+      title: 'VOLUME / FAKE CHECK',
+      value: d.volume24h > 0 ? '$' + Math.round(d.volume24h).toLocaleString() : 'No data',
+      detail: d.fakeVolumeFlag
+        ? `<strong style="color:var(--danger)">Suspicious:</strong> avg trade $${Math.round(d.avgTxSize).toLocaleString()} — too large for organic memecoin activity. (Ch.4)`
+        : d.volume24h > 0
+        ? `${d.txns24h} txns · avg $${Math.round(d.avgTxSize).toLocaleString()}/trade — looks organic`
+        : 'No volume data available.',
+      status: d.fakeVolumeFlag ? 'fail' : d.volume24h > 0 ? 'pass' : 'warn'
+    },
+    {
+      title: 'SNIPER DETECTION',
+      value: d.sniperFlag ? 'BOTS DETECTED' : d.earlyTxns.length > 0 ? 'LOOKS ORGANIC' : 'NO DATA',
+      detail: d.earlyTxns.length > 0
+        ? `${d.earlyTxns.length} early txns · ${d.uniqueSlots} unique blocks${d.sniperFlag ? ' — <strong style="color:var(--danger)">multiple txns in same block = sniper bots</strong>' : ' — spread naturally'} (Ch.3 §5)`
+        : 'No transaction history fetched.',
+      status: d.sniperFlag ? 'fail' : d.earlyTxns.length > 0 ? 'pass' : 'warn'
+    }
+  ];
+
+  document.getElementById('checksGrid').innerHTML = checks.map(c => `
+    <div class="check-card ${c.status}">
+      <div class="check-header"><div class="check-title">${c.title}</div><div class="check-status ${c.status}">${c.status.toUpperCase()}</div></div>
+      <div class="check-value">${c.value}</div>
+      <div class="check-detail">${c.detail}</div>
+    </div>`).join('');
+
+  // Flags
+  const flags = [];
+  if (!d.mintRevoked) flags.push({ icon:'🚨', text:'<strong>Mint authority NOT revoked</strong> — dev can print unlimited tokens and dump on you at any time. Most dangerous rug setup. (Ch.2 Rule 1)' });
+  if (!d.liquidityLocked && d.liquidityUsd > 0) flags.push({ icon:'🚨', text:'<strong>Liquidity is UNLOCKED</strong> — dev can pull the entire pool at any time, sending price instantly to zero. (Ch.3 Rule 3)' });
+  if (d.holderRisk === 'high') flags.push({ icon:'🚨', text:`<strong>Top wallet holds ${d.topHolderPct}% of supply</strong> — a single sell from this wallet can collapse the chart. (Ch.3 §3)` });
+  if (d.fakeVolumeFlag) flags.push({ icon:'🚨', text:`<strong>Fake volume pattern detected</strong> — avg trade size $${Math.round(d.avgTxSize).toLocaleString()} is abnormally large. Likely wash trading. Charts that look healthy will die when real traders enter. (Ch.4)` });
+  if (d.sniperFlag) flags.push({ icon:'⚠️', text:'<strong>Sniper bots detected at launch</strong> — multiple txns in the same block indicates automated sniping. These wallets accumulated cheap and will dump on retail. (Ch.3 §5)' });
+  if (!d.freezeRevoked) flags.push({ icon:'⚠️', text:'<strong>Freeze authority is active</strong> — in a worst case, this can be used to freeze wallets and prevent selling.' });
+  if (d.liquidityUsd > 0 && d.liquidityUsd < 5000) flags.push({ icon:'⚠️', text:`<strong>Very low liquidity ($${Math.round(d.liquidityUsd).toLocaleString()})</strong> — massive slippage on any trade. Violent wicks guaranteed. (Ch.2 Rule 3)` });
+  if (d.pairAge !== null && d.pairAge < 1) flags.push({ icon:'⚠️', text:'<strong>Token launched less than 24 hours ago</strong> — extremely high risk stage. Only enter if ALL other signals are clean. (Ch.8)' });
+  if (flags.length === 0) flags.push({ icon:'✅', text:'No critical red flags detected from on-chain data. Verify manually on Solscan and GMGN before entering.' });
+
+  document.getElementById('flagsList').innerHTML = flags.map(f =>
+    `<div class="flag-item"><div class="flag-icon">${f.icon}</div><div class="flag-text">${f.text}</div></div>`).join('');
+
+  document.getElementById('bookRef').innerHTML = `<span>📖 Framework:</span> "The Ultimate Memecoin Playbook for Noobs" — mint authority (Ch.2), liquidity (Ch.2–3), holders (Ch.3 §3), fake volume (Ch.4), sniper detection (Ch.3 §5), smart money (Ch.14).`;
+
+  // Holders tab
+  const colors = ['#ff3d57','#ffb800','#00c6ff','#a78bfa','#34d399','#f97316','#60a5fa','#f472b6','#4ade80','#94a3b8'];
+  document.getElementById('holderBars').innerHTML = d.topHolders.length > 0
+    ? d.topHolders.map((h, i) => `
+      <div class="holder-row">
+        <div class="holder-label" title="${h.addr}">${h.addr ? h.addr.slice(0,6)+'...'+h.addr.slice(-4) : 'Wallet '+(i+1)}</div>
+        <div class="holder-bar-wrap"><div class="holder-bar-fill" style="width:${Math.min(h.pct,100)}%;background:${colors[i]};"></div></div>
+        <div class="holder-pct">${h.pct}%</div>
+      </div>`).join('')
+    : '<div style="font-family:var(--font-mono);font-size:12px;color:var(--muted);padding:20px;">Holder data unavailable — token may not have active accounts yet.</div>';
+
+  // Early txns tab
+  document.getElementById('txnBody').innerHTML = d.earlyTxns.length > 0
+    ? d.earlyTxns.map((t, i) => {
+        const cls = t.err ? 'red' : i < 3 ? 'yellow' : '';
+        const signal = t.err ? '❌ Failed' : i < 2 ? '🔴 Very first' : i < 5 ? '🟡 Early' : '⚪ Normal';
+        return `<tr>
+          <td style="font-size:10px;">${t.sig}</td>
+          <td class="${t.err ? 'red' : 'green'}">${t.err ? 'Failed' : 'OK'}</td>
+          <td>${t.time}</td>
+          <td style="font-family:var(--font-mono);font-size:10px;color:var(--muted);">${t.slot || '—'}</td>
+          <td class="${cls}">${signal}</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px;font-family:var(--font-mono);font-size:12px;">No transaction history found</td></tr>';
+
+  // Market tab
+  document.getElementById('marketContent').innerHTML = `
+    <div class="checks-grid">
+      <div class="check-card ${d.priceUsd > 0 ? 'pass' : 'warn'}">
+        <div class="check-header"><div class="check-title">PRICE</div><div class="check-status ${d.priceUsd > 0 ? 'pass' : 'warn'}">${d.priceUsd > 0 ? 'LIVE' : 'N/A'}</div></div>
+        <div class="check-value">${d.priceUsd > 0 ? '$'+d.priceUsd.toFixed(10).replace(/\.?0+$/,'') : '—'}</div>
+        <div class="check-detail">24h: <strong style="color:${d.priceChange24h>=0?'var(--safe)':'var(--danger)'}">${d.priceChange24h>=0?'+':''}${Number(d.priceChange24h).toFixed(2)}%</strong></div>
+      </div>
+      <div class="check-card ${d.marketCap > 0 ? 'pass' : 'warn'}">
+        <div class="check-header"><div class="check-title">MARKET CAP</div><div class="check-status ${d.marketCap > 0 ? 'pass' : 'warn'}">${d.marketCap > 0 ? 'LIVE' : 'N/A'}</div></div>
+        <div class="check-value">${d.marketCap > 0 ? '$'+Math.round(d.marketCap).toLocaleString() : '—'}</div>
+        <div class="check-detail">FDV from DexScreener</div>
+      </div>
+      <div class="check-card ${d.pairAge===null?'warn':d.pairAge<1?'fail':d.pairAge<7?'warn':'pass'}">
+        <div class="check-header"><div class="check-title">PAIR AGE</div><div class="check-status ${d.pairAge===null?'warn':d.pairAge<1?'fail':d.pairAge<7?'warn':'pass'}">${d.pairAge===null?'N/A':d.pairAge<1?'NEW':d.pairAge+'D'}</div></div>
+        <div class="check-value">${d.pairAge===null?'—':d.pairAge<1?'< 1 day':d.pairAge+' days'}</div>
+        <div class="check-detail">${d.pairAge!==null&&d.pairAge<1?'Brand new — extreme caution':d.pairAge!==null&&d.pairAge<7?'Very young token':d.pairAge!==null?'Has some age — positive signal':'No pair data'}</div>
+      </div>
+      <div class="check-card ${d.txns24h>100?'pass':d.txns24h>20?'warn':'fail'}">
+        <div class="check-header"><div class="check-title">24H TXN COUNT</div><div class="check-status ${d.txns24h>100?'pass':d.txns24h>20?'warn':'fail'}">${d.txns24h>100?'ACTIVE':d.txns24h>0?'LOW':'DEAD'}</div></div>
+        <div class="check-value">${d.txns24h>0?d.txns24h.toLocaleString():'—'}</div>
+        <div class="check-detail">${d.buys24h} buys · ${d.sells24h} sells · High txn count = real activity (Ch.4)</div>
+      </div>
+    </div>
+    <div class="narrative-box" style="margin-top:16px;">
+      <div class="narrative-title">// BOOK RULE — Ch.6 & Ch.10: Mindshare</div>
+      <div class="narrative-text"><strong>Tokens move because people look at them.</strong> Real attention builds gradually — X volume that spikes before chart volume is a positive signal. X activity that follows a price pump is usually paid promotion. Always verify manually. (Ch.6, Ch.10)</div>
+    </div>`;
+
+  document.getElementById('results').classList.add('visible');
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function switchTab(name) {
+  const panels = ['overview','holders','earlytxns','market'];
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', panels[i]===name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id==='tab-'+name));
+}
+
+document.getElementById('tokenInput').addEventListener('keydown', e => { if(e.key==='Enter') runScan(); });
+document.getElementById('heliusKeyInput').addEventListener('keydown', e => { if(e.key==='Enter') saveKey(); });
+</script>
+</body>
+</html>
